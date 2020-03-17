@@ -18,9 +18,11 @@
             socket = new WebSocket("ws://localhost:8080/echo")
         ;
 
-        socket.onopen = res => output.innerText = res;
+        socket.onopen = () => output.innerText = 'Connected\n';
 
-        send.onclick = socket.send(input.value);
+        socket.onmessage = ({ data }) => output.innerText += data + '\n';
+
+        send.onclick = () => socket.send(input.value);
     })()
 </script>
 </html>
