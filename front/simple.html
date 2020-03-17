@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple echoed form</title>
+</head>
+<body>
+<input id="input" type="text">
+<button id="send">Send</button>
+<pre id="output"></pre>
+</body>
+<script>
+    (() => {
+        const
+            input = document.getElementById('input'),
+            send = document.getElementById('send'),
+            output = document.getElementById('output'),
+            socket = new WebSocket("ws://localhost:8080/echo")
+        ;
+
+        socket.onopen = res => output.innerText = res;
+
+        send.onclick = socket.send(input.value);
+    })()
+</script>
+</html>
