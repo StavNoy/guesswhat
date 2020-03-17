@@ -1,12 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"net/http"
 	"os"
 	"strings"
 )
+
+type Message struct {
+	Message string
+}
 
 func main() {
 	dir, _ := os.Getwd()
@@ -17,17 +22,24 @@ func main() {
 		conn, _ := upgrader.Upgrade(w, r, nil)
 
 		for {
-			msgType, input, err := conn.ReadMessage()
+			_, input, err := conn.ReadMessage()
 			if err != nil {
 				fmt.Printf(err.Error())
 
 				return
 			}
 
-			output := []byte(strings.ToUpper(string(input)))
+			dec := json.NewDecoder(strings.NewReader(string(input)))
 
-			// Write message back to browser
-			if err = conn.WriteMessage(msgType, output); err != nil {
+			var inputMessage Message
+			decErr := dec.Decode(&inputMessage)
+			if decErr != nil {
+				fmt.Println(err.Error())
+			}
+
+			output := Message{Message:strings.ToUpper(inputMessage.Message)}
+
+			if err = conn.WriteJSON(output); err != nil {
 				fmt.Printf(err.Error())
 
 				return

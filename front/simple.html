@@ -20,9 +20,11 @@
 
         socket.onopen = () => output.innerText = 'Connected\n';
 
-        socket.onmessage = ({ data }) => output.innerText += data + '\n';
+        socket.onmessage = res => output.innerText += res.data.Message + '\n';
 
-        send.onclick = () => socket.send(input.value);
+        send.onclick = () => socket.send(JSON.stringify({ message: input.value }));
+
+        send.focus()
     })()
 </script>
 </html>
