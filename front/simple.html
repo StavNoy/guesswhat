@@ -4,23 +4,44 @@
     <meta charset="UTF-8">
     <title>Simple echoed form</title>
 </head>
+<style>
+    body {
+        min-height: 90vh;
+    }
+
+    form {
+        position: fixed;
+        bottom: 0;
+        display: flex;
+    }
+</style>
 <body>
-<input id="input" type="text">
-<button id="send">Send</button>
-<pre id="output"></pre>
+<ul id="messages">
+
+</ul>
+<form action="# ">
+    <input id="input" type="text">
+    <button id="send">Send</button>
+</form>
 </body>
 <script>
     (() => {
         const
             input = document.getElementById('input'),
             send = document.getElementById('send'),
-            output = document.getElementById('output'),
+            messages = document.getElementById('messages'),
             socket = new WebSocket("ws://localhost:8080/echo")
         ;
 
-        socket.onopen = () => output.innerText = 'Connected\n';
+        function addMsg(text) {
+            const msg = document.createElement('li');
+            msg.innerText = text;
+            messages.appendChild(msg)
+        }
 
-        socket.onmessage = res => output.innerText += res.data.Message + '\n';
+        socket.onopen = () => addMsg('Connected');
+
+        socket.onmessage = res => addMsg(JSON.parse(res.data).Message);
 
         send.onclick = () => socket.send(JSON.stringify({ message: input.value }));
 
