@@ -3,28 +3,51 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/websocket"
+	. "github.com/gorilla/websocket"
 	"net/http"
-	"os"
 	"strings"
 )
 
 type Message struct {
-	Message string
+	Message string `json:"message"`
 }
 
+
 func main() {
-	dir, _ := os.Getwd()
+	var conns []*Conn
 
-	upgrader := websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
+	upgrader := Upgrader{
+		ReadBufferSize: 1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(_ *http.Request) bool {
+			return true
+		},
+	}
 
-	http.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
-		conn, _ := upgrader.Upgrade(w, r, nil)
+	http.HandleFunc("/", handleConnect(upgrader, conns))
+
+	http.ListenAndServe(":8080", nil)
+}
+
+func handleConnect(upgrader Upgrader, conns []*Conn) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			fmt.Println(err)
+
+			return
+		}
+		conns = append(conns, conn)
+		connI := len(conns) - 1
 
 		for {
 			_, input, err := conn.ReadMessage()
 			if err != nil {
-				fmt.Printf(err.Error())
+				if IsCloseError(err, CloseGoingAway) {
+					conns = append(conns[:connI], conns[connI+1:]...)
+				} else {
+					fmt.Println(err)
+				}
 
 				return
 			}
@@ -37,19 +60,15 @@ func main() {
 				fmt.Println(err.Error())
 			}
 
-			output := Message{Message:strings.ToUpper(inputMessage.Message)}
+			output := Message{Message: strings.ToUpper(inputMessage.Message)}
 
-			if err = conn.WriteJSON(output); err != nil {
-				fmt.Printf(err.Error())
+			for _, aConn := range conns {
+				if err = aConn.WriteJSON(output); err != nil {
+					fmt.Println(err)
 
-				return
+					return
+				}
 			}
 		}
-	})
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, dir + "/front/simple.html")
-	})
-
-	http.ListenAndServe(":8080", nil)
+	}
 }
