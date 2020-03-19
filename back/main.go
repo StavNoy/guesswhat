@@ -5,17 +5,14 @@ import (
 	"fmt"
 	. "github.com/gorilla/websocket"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 )
 
-type Message struct {
-	Message string `json:"message"`
-}
-
 func main() {
-	conns := map[int]*Conn{}
-	index := 0
+	users := map[int]User{}
+	nextId := 0
 	mutex := &sync.Mutex{}
 
 	upgrader := Upgrader{
@@ -35,9 +32,9 @@ func main() {
 		}
 
 		mutex.Lock()
-		connI := index
-		index++
-		conns[connI] = conn
+		user := User{Conn: conn, Nickname: "", ID: nextId}
+		nextId++
+		users[user.ID] = user
 		mutex.Unlock()
 
 		for {
@@ -45,7 +42,7 @@ func main() {
 			if err != nil {
 				if IsCloseError(err, CloseGoingAway) {
 					mutex.Lock()
-					delete(conns, connI)
+					delete(users, user.ID)
 					mutex.Unlock()
 				} else {
 					fmt.Println(err)
@@ -54,25 +51,52 @@ func main() {
 				return
 			}
 
-			dec := json.NewDecoder(strings.NewReader(string(input)))
-
-			var inputMessage Message
-			decErr := dec.Decode(&inputMessage)
-			if decErr != nil {
-				fmt.Println(err.Error())
-			}
-
-			output := Message{Message: strings.ToUpper(inputMessage.Message)}
-
-			for _, aConn := range conns {
-				if err = aConn.WriteJSON(output); err != nil {
-					fmt.Println(err)
-
-					return
-				}
-			}
+			inToOut(&user, input, users)
 		}
 	})
 
 	http.ListenAndServe(":8080", nil)
+}
+
+type Message struct {
+	Type string `json:"type"`
+	Message string `json:"message"`
+	Nickname string `json:"nickname"`
+}
+
+type OutMessage struct {
+	Message string `json:"message"`
+}
+
+type User struct {
+	Conn     *Conn
+	Nickname string
+	ID       int
+}
+
+func inToOut(from *User, input []byte, users map[int]User) {
+	var msg Message
+	json.NewDecoder(strings.NewReader(string(input))).Decode(&msg)
+
+	if msg.Type == "message" {
+		send(formatMessage(from, msg.Message), users)
+
+		return
+	}
+
+	if msg.Type == "nickname" {
+		output := formatMessage(from, "Changed nickname to \"" + msg.Nickname +"\"")
+		from.Nickname = msg.Nickname
+		send(output, users)
+	}
+}
+
+func formatMessage(from *User, msg string) OutMessage {
+	return OutMessage{ Message:from.Nickname + "(" + strconv.Itoa(from.ID) + "): " + strings.ToUpper(msg) }
+}
+
+func send(msg OutMessage, users map[int]User) {
+	for _, user := range users {
+		user.Conn.WriteJSON(msg)
+	}
 }

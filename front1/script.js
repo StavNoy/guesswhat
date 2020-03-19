@@ -19,12 +19,27 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     socket.onclose = socket.onerror = (ev) => {
-        console.log(ev);
         state.innerText = 'Disconnected';
         state.classList.remove('connected')
     };
 
-    send.onclick = () => socket.send(JSON.stringify({ message: input.value }));
+    send.onclick = () => {
+        let toSend;
+
+        if (input.value.startsWith('/name ')) {
+            toSend = {
+                type: 'nickname',
+                nickname: input.value.substring('/name '.length)
+            }
+        } else {
+            toSend = {
+                type: 'message',
+                message: input.value
+            }
+        }
+
+        socket.send(JSON.stringify(toSend));
+    };
 
     send.focus()
 });
