@@ -6,15 +6,17 @@ import (
 	. "github.com/gorilla/websocket"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type Message struct {
 	Message string `json:"message"`
 }
 
-
 func main() {
-	var conns []*Conn
+	conns := map[int]*Conn{}
+	index := 0
+	mutex := &sync.Mutex{}
 
 	upgrader := Upgrader{
 		ReadBufferSize: 1024,
@@ -24,27 +26,27 @@ func main() {
 		},
 	}
 
-	http.HandleFunc("/", handleConnect(upgrader, conns))
-
-	http.ListenAndServe(":8080", nil)
-}
-
-func handleConnect(upgrader Upgrader, conns []*Conn) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			fmt.Println(err)
 
 			return
 		}
-		conns = append(conns, conn)
-		connI := len(conns) - 1
+
+		mutex.Lock()
+		connI := index
+		index++
+		conns[connI] = conn
+		mutex.Unlock()
 
 		for {
 			_, input, err := conn.ReadMessage()
 			if err != nil {
 				if IsCloseError(err, CloseGoingAway) {
-					conns = append(conns[:connI], conns[connI+1:]...)
+					mutex.Lock()
+					delete(conns, connI)
+					mutex.Unlock()
 				} else {
 					fmt.Println(err)
 				}
@@ -70,5 +72,7 @@ func handleConnect(upgrader Upgrader, conns []*Conn) func(w http.ResponseWriter,
 				}
 			}
 		}
-	}
+	})
+
+	http.ListenAndServe(":8080", nil)
 }
