@@ -14,6 +14,8 @@ func main() {
 	users := map[int]User{}
 	nextId := 0
 	mutex := &sync.Mutex{}
+	var msgs []*OutMessage
+	msgMutex := &sync.Mutex{}
 
 	upgrader := Upgrader{
 		ReadBufferSize: 1024,
@@ -37,6 +39,10 @@ func main() {
 		users[user.ID] = user
 		mutex.Unlock()
 
+		if msgs != nil {
+			conn.WriteJSON(msgs)
+		}
+
 		for {
 			_, input, err := conn.ReadMessage()
 			if err != nil {
@@ -51,7 +57,16 @@ func main() {
 				return
 			}
 
-			inToOut(&user, input, users)
+			if out := inToOut(&user, input, users); out != nil {
+				msgMutex.Lock()
+				msgs = append(msgs, out)
+
+				for _, u := range users {
+					u.Conn.WriteJSON(out)
+				}
+
+				msgMutex.Unlock()
+			}
 		}
 	})
 
@@ -74,29 +89,24 @@ type User struct {
 	ID       int
 }
 
-func inToOut(from *User, input []byte, users map[int]User) {
+func inToOut(from *User, input []byte, users map[int]User) *OutMessage {
 	var msg Message
 	json.NewDecoder(strings.NewReader(string(input))).Decode(&msg)
 
 	if msg.Type == "message" {
-		send(formatMessage(from, msg.Message), users)
-
-		return
+		return formatMessage(from, msg.Message)
 	}
 
 	if msg.Type == "nickname" {
 		output := formatMessage(from, "Changed nickname to \"" + msg.Nickname +"\"")
 		from.Nickname = msg.Nickname
-		send(output, users)
+
+		return output
 	}
+
+	return nil
 }
 
-func formatMessage(from *User, msg string) OutMessage {
-	return OutMessage{ Message:from.Nickname + "(" + strconv.Itoa(from.ID) + "): " + strings.ToUpper(msg) }
-}
-
-func send(msg OutMessage, users map[int]User) {
-	for _, user := range users {
-		user.Conn.WriteJSON(msg)
-	}
+func formatMessage(from *User, msg string) *OutMessage {
+	return &OutMessage{ Message:from.Nickname + "(" + strconv.Itoa(from.ID) + "): " + strings.ToUpper(msg) }
 }

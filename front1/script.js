@@ -13,9 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     socket.onmessage = res => {
-        const msg = document.createElement('li');
-        msg.innerText = JSON.parse(res.data).message;
-        messages.appendChild(msg)
+        [].concat(JSON.parse(res.data)).forEach(msg => {
+            const msgEl = document.createElement('li');
+            msgEl.innerText = msg.message;
+            messages.appendChild(msgEl)
+        });
     };
 
     socket.onclose = socket.onerror = (ev) => {
